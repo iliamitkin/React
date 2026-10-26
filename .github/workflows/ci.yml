@@ -1,50 +1,82 @@
-name: CI
+name: CI/CD
 
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
-    permissions:
-      contents: read
-      pages: write
+    name: Test and build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-        if: github.event_name == 'push'
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm test -- --runInBand
-      - run: npm run build
+      - name: Install dependencies from lockfile
+        run: npm ci
+      - name: Run tests with coverage
+        run: npm run test:coverage -- --ci --runInBand
+      - name: Save coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Build application and bundle report
+        run: npm run build:analyze
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_LOGROCKET_APP_ID: ${{ secrets.VITE_LOGROCKET_APP_ID }}
           VITE_GA_MEASUREMENT_ID: ${{ secrets.VITE_GA_MEASUREMENT_ID }}
-      - uses: actions/upload-pages-artifact@v3
-        if: github.event_name == 'push'
+      - name: Save bundle report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-report
+          path: dist/bundle-report.html
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove analysis report from public site
+        run: rm dist/bundle-report.html
+      - name: Prepare Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Deploy to GitHub Pages
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
-      - id: deployment
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Publish site
+        id: deployment
         uses: actions/deploy-pages@v4

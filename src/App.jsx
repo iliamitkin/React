@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { HashRouter, Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
 import Dashboard from './pages/Dashboard';
@@ -14,7 +14,7 @@ function Layout() {
   useEffect(() => { trackPageView(location.pathname); }, [location.pathname]);
   return <div className="app-shell">
     <aside className="sidebar">
-      <a className="brand" href="/"><span className="brand-mark">r</span><span>ритм<span className="brand-dot">.</span></span></a>
+      <Link className="brand" to="/"><span className="brand-mark">r</span><span>ритм<span className="brand-dot">.</span></span></Link>
       <div className="side-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
       <nav className="side-nav" aria-label="Основная навигация">
         <NavLink to="/" end><span>▦</span> Мои привычки</NavLink>
@@ -28,4 +28,4 @@ function Layout() {
   </div>
 }
 
-export default function App() { return <Provider store={store}><BrowserRouter><Layout/></BrowserRouter></Provider>; }
+export default function App() { return <Provider store={store}><HashRouter><Layout/></HashRouter></Provider>; }
